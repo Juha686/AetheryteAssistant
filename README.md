@@ -98,7 +98,7 @@ OLD: replicas: 5
 NEW: replicas: 1
 ```
 
-Also update index.js to use shardCount of 1
+Also update index.js to use shardCount of 1, and redeploy after code change
 
 ```js
 OLD: const client = new Client({shards: shardId, shardCount: 5,  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.DirectMessages], partials: [Partials.Channel] });
