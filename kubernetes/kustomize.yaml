@@ -1,0 +1,4 @@
+resources:
+- bot-deployment.yaml
+- example-redis-configuration.yaml
+- redis-deployment.yaml

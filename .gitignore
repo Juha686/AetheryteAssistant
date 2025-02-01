@@ -1,0 +1,7 @@
+node_modules
+.env
+data/appendonly.aof
+data/dump.rdb
+config.json
+config -*.json
+data/temp-*.rdb

@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: universalis-bot
+  labels:
+    app: universalis-bot
+spec:
+  replicas: 5
+  serviceName: universalis-bot
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: universalis-bot
+  template:
+    metadata:
+      labels:
+        app: universalis-bot
+    spec:
+      containers:
+      - name: universalis-bot
+        image: registry.digitalocean.com/nesthub/universalis_bot_production:latest
+        imagePullPolicy: Always
+        env:
+        - name: BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: bot-secrets
+              key: bot-token
+        - name: CLIENT_ID
+          value: "1083727340246401045"
+        - name: GUILD_ID
+          value: "1084182413934088313"
+        - name: CHATGPT_API
+          valueFrom:
+            secretKeyRef:
+              name: bot-secrets
+              key: chatgpt-token
+        - name: FEEDBACK_CHANNEL
+          value: "1087312098066960424"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: bot-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: universalis-bot

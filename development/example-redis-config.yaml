@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: example-redis-config
+data:
+  redis-config: |
+    protected-mode no
+    appendonly yes
+    save 900 1
+    save 300 10
+    save 60 10000
+    auto-aof-rewrite-percentage 100
+    auto-aof-rewrite-min-size 64mb
+    dir /redis-master-data
+    daemonize no
+    loadmodule /opt/redis-stack/lib/redisearch.so
+    loadmodule /opt/redis-stack/lib/redisgraph.so
+    loadmodule /opt/redis-stack/lib/redistimeseries.so
+    loadmodule /opt/redis-stack/lib/rejson.so
+    loadmodule /opt/redis-stack/lib/redisbloom.s
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-probes
+data:
+  readiness.sh: |
+    #!/bin/sh
+
+    pingResponse="$(redis-cli -h localhost ping)"
+    if [ "$?" -eq "124" ]; then
+      echo "PING timed out"
+      exit 1
+    fi
+
+    if [ "$pingResponse" != "PONG"]; then
+      echo "$pingResponse"
+      exit 1
+    fi
+  liveness.sh: |
+    #!/bin/sh
+
+    pingResponse="$(redis-cli -h localhost ping | head -n1 | awk '{print $1;}')"
+    if [ "$?" -eq "124" ]; then
+      echo "PING timed out"
+      exit 1
+    fi
+
+    if [ "$pingResponse" != "PONG"] && [ "$pingResponse" != "LOADING" ] && [ "$pingResponse" != "MASTERDOWN" ]; then
+      echo "$pingResponse"
+      exit 1
+    fi

@@ -1,0 +1,113 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-volume-claim
+  labels:
+    app: redis
+    type: local
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: redis
+  template:
+    metadata:
+      labels:
+        name: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis/redis-stack:latest
+        
+        livenessProbe:
+          exec:
+            command:
+              - "sh"
+              - "-c"
+              - "/probes/liveness.sh"
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+          periodSeconds: 5
+          failureThreshold: 5
+          successThreshold: 1
+        readinessProbe:
+          exec:
+            command:
+            - "sh"
+            - "-c"
+            - "/probes/readiness.sh"
+          initialDelaySeconds: 20
+          timeoutSeconds: 5
+          periodSeconds: 3
+        startupProbe:
+          exec:
+            command:
+            - "sh"
+            - "-c"
+            - "/probes/readiness.sh"
+          failureThreshold: 30
+          periodSeconds: 10
+        env:
+        - name: MASTER
+          value: "true"
+        - name: REDIS_ARGS
+          value: "--appendonly yes --protected-mode no --save 900 1 --save 300 10 --save 60 10000"
+        ports:
+        - containerPort: 6379
+        - containerPort: 8001
+        volumeMounts:
+        - mountPath: /data
+          name: data
+        - mountPath: /redis-master
+          name: config
+        - mountPath: /probes
+          name: probes
+          readOnly: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: redis-volume-claim
+        - name: config
+          configMap:
+            name: example-redis-config
+            items:
+            - key: redis-config
+              path: redis.conf
+        - name: probes
+          configMap:
+            name: redis-probes
+            defaultMode: 0555
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-cluster-service
+spec:
+  type: ClusterIP
+  ports:
+    - targetPort: 6379
+      port: 6379
+      protocol: TCP
+  selector:
+    name: redis
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: redis

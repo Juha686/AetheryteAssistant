@@ -1,0 +1,9 @@
+node_modules
+bot-deployment.yaml
+example-redis-config.yaml
+redis-deployment.yaml
+deploy.bat
+deploy-fill-redis.js
+kubernetes/*
+development/*
+data/*
