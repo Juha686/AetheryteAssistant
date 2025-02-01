@@ -92,31 +92,10 @@ kubectl config use-context docker-desktop
 
 ### Local Deployment Steps
 
-1. Build and push to local registry:
-```bash
-docker build -t localhost:5000/universalis-bot:local .
-docker push localhost:5000/universalis-bot:local
-```
-
-2. Create required secrets:
-```bash
-kubectl create secret generic bot-secrets --from-literal=bot-token='token' --from-literal=chatgpt-token='token'
-```
-
-3. Update image in deployment files to use local registry:
-```bash
-# Edit kubernetes/bot-deployment.yaml
-# Change image to: localhost:5000/universalis-bot:local
-```
-
-4. Apply Kubernetes configurations:
-```bash
-kubectl apply -f ./kubernetes/
-```
-
-5. For development, reduce replicas to 1:
-```bash
-kubectl scale statefulset universalis-bot --replicas=1
+1. For development, reduce replicas to 1 in kubernetes/bot-deployment.yaml:
+```yaml
+OLD: replicas: 5
+NEW: replicas: 1
 ```
 
 Also update index.js to use shardCount of 1
@@ -124,6 +103,28 @@ Also update index.js to use shardCount of 1
 ```js
 OLD: const client = new Client({shards: shardId, shardCount: 5,  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.DirectMessages], partials: [Partials.Channel] });
 NEW: const client = new Client({shards: shardId, shardCount: 1,  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.DirectMessages], partials: [Partials.Channel] });
+```
+
+2. Build and push to local registry:
+```bash
+docker build -t localhost:5000/universalis-bot:local .
+docker push localhost:5000/universalis-bot:local
+```
+
+3. Create required secrets:
+```bash
+kubectl create secret generic bot-secrets --from-literal=bot-token='token' --from-literal=chatgpt-token='token'
+```
+
+4. Update image in deployment files to use local registry:
+```bash
+# Edit kubernetes/bot-deployment.yaml
+# Change image to: localhost:5000/universalis-bot:local
+```
+
+5. Apply Kubernetes configurations:
+```bash
+kubectl apply -f ./kubernetes/
 ```
 
 6. Monitor pods:
