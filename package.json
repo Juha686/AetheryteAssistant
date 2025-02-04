@@ -13,7 +13,7 @@
     "discord.js": "^14.7.1",
     "openai": "^3.2.1",
     "redis": "^4.6.5",
-    "redis-om": "^0.4.0-beta.1",
+    "redis-om": "^0.4.7",
     "undici": "^5.20.0"
   },
   "devDependencies": {
