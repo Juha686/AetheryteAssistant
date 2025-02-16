@@ -6,6 +6,7 @@ const userSchema = new Schema('User', {
     SERVER: { type: 'string' },
     LANGUAGE: { type: 'string' },
     SEEN_AD: { type: 'boolean' },
+    threads: { type: 'string' }
 }, {
     dataStructure: 'HASH',
 });

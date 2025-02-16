@@ -14,7 +14,7 @@ const imageDefinitions = [
                     'type': 'string',
                     'description': 'Prompt for the image generating AI. Provide a detailed description.',
                 },
-                            },
+            },
             'required': ['prompt'],
         },
         { isPremium: true }
@@ -23,38 +23,22 @@ const imageDefinitions = [
 
 // Function implementations
 async function generate_image(interaction, args) {
-    console.log('Generate image called with args:', args);
     if (!openaiInstance) {
         console.error('OpenAI instance not initialized');
         throw new Error('OpenAI instance not initialized');
     }
     
     try {
-        const response = await openaiInstance.createImage({
-            model: 'dall-e-3',
-            prompt: 'I NEED to test how the tool works with extremely simple prompts. DO NOT add any detail, just use it AS-IS: ' + args.prompt + ' Image should be stylised like the game Final Fantasy 14.',
+        const response = await openaiInstance.images.generate({
+            model: "dall-e-3",
+            prompt: args.prompt,
             n: 1,
-            size: "1024x1024",
-            response_format: "url"
+            size: "1024x1024"
         });
-        console.log('Image generation response:', response.data);
-        
-        // Send the image URL to Discord as an embed
-        await interaction.editReply({ 
-            embeds: [{
-                image: {
-                    url: response.data.data[0].url
-                }
-            }]
-        });
-        
-        return response.data.data[0].url;
+
+        return response.data[0].url;
     } catch (error) {
         console.error('Error in generate_image:', error);
-        if (error.response?.data?.error) {
-            console.error('OpenAI error details:', error.response.data.error);
-            throw new Error(`Image generation failed: ${error.response.data.error.message}`);
-        }
         throw error;
     }
 }

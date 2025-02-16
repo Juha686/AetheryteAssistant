@@ -1,5 +1,4 @@
 const baseCommand = require('./baseCommand');
-const { EmbedBuilder, EntitlementManager } = require('discord.js');
 
 class addEntitlementCommand extends baseCommand {
 

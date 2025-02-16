@@ -13,7 +13,7 @@ for (const file of commandFiles) {
 	console.log('Deploying ' + file);
 	const commandClass = require(path.join(commandsPath, file));
 	// Check that the commandClass is a class before creating an instance of it
-	if (typeof commandClass === 'function' && commandClass.name !== 'BaseCommand') {
+	if (typeof commandClass === 'function' && commandClass.name !== 'BaseCommand' && commandClass.name !== 'AICommand') {
 		const command = new commandClass();
 		commands.push(command.data.toJSON());
 	}

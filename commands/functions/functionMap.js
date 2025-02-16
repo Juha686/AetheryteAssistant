@@ -23,32 +23,39 @@ function initializeModules(dependencies) {
 // Combine all function definitions
 const functionDefinitions = Object.values(functionModules).flatMap(module => module.definitions);
 
-// Get function definitions filtered by premium status
-function getFunctionDefinitions(hasPremium = false) {
-    return functionDefinitions.filter(def => !def.isPremium || hasPremium);
+function getFunctionDefinitions(raw = false) {
+    // Return raw definitions if requested
+    if(raw) {
+        return functionDefinitions;
+    }
+
+    // Only include fields that OpenAI Assistant API accepts
+    return functionDefinitions
+        .map(def => ({
+            type: 'function',
+            function: {
+                name: def.function.name,
+                description: def.function.description,
+                parameters: def.function.parameters
+            }
+        }));
 }
 
 // Automatically generate function map from definitions
 const functionMap = functionDefinitions.reduce((map, definition) => {
     const moduleName = Object.entries(functionModules).find(([_, module]) => 
-        module.definitions.some(def => def.name === definition.name)
-    )[0];
-    
-    map[definition.name] = (interaction, args) => {
-        // Just validate required parameters
-        const { required = [] } = definition.parameters;
-        for (const paramName of required) {
-            if (!(paramName in args)) {
-                throw new Error(`Missing required parameter: ${paramName} for function ${definition.name}`);
-            }
-        }
+        module.definitions.some(def => 
+            def.function && def.function.name === definition.function.name
+        )
+    )?.[0];
 
-        // Pass args object directly instead of building an array
-        return functionModules[moduleName][definition.name](interaction, args);
-    };
+    if (moduleName && functionModules[moduleName][definition.function.name]) {
+        map[definition.function.name] = functionModules[moduleName][definition.function.name];
+    }
     
     return map;
 }, {});
+
 
 module.exports = {
     functionMap,

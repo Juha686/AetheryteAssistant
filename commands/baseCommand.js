@@ -1,7 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const { mapUserLanguage } = require('../libraries/language.js');
-const { functionMap } = require('./functions/functionMap');
 
 class BaseCommand {
     constructor(client = null) {
@@ -13,6 +12,7 @@ class BaseCommand {
             this.chatMessageLogRepository = client.redisrepositories.get('chatMessageLogRepository');
             this.creativeAssistantMessageLogRepository = client.redisrepositories.get('creativeAssistantMessageLogRepository');
             this.metricsRepository = client.redisrepositories.get('metricsRepository');
+            this.configRepository = client.redisrepositories.get('configRepository');
         }
         this.premium_sku = '1286386380380962856';
         this.data = new SlashCommandBuilder();
@@ -54,7 +54,7 @@ class BaseCommand {
         );
         
         // Check if user has valid entitlements or is the specified user ID
-        return validEntitlements.size > 0 || user.id == '169206245478236161';
+        return validEntitlements.size > 0;
     }
 
     async postAdvert(interaction) {
@@ -83,79 +83,6 @@ class BaseCommand {
             this.userRepository.save(user);
         }
     }
-
-    async resolve_functions(interaction, response, messageLog, messages, functions_list, openai, model) {
-        console.log('Resolving function call');
-        
-        const function_call = response.data.choices[0].message.function_call;
-        console.log('Function call:', function_call);
-        console.log('Looking for function:', function_call.name);
-        console.log('Available functions:', Object.keys(functionMap));
-
-        if (response.data.choices[0].message.content != null) {
-            await interaction.editReply(response.data.choices[0].message.content);
-        }
-
-        const func = functionMap[function_call.name];
-        
-        if (!func) {
-            console.error(`Function ${function_call.name} not found in function map`);
-            function_call.results = 'This function doesnt exist. Advise user to use other commands.';
-            return { response, messageLog };
-        }
-
-        try {
-            const func_arguments = JSON.parse(function_call.arguments);
-            function_call.results = await func(interaction, func_arguments);
-        } catch (error) {
-            console.error(`Error executing function ${function_call.name}:`, error);
-            function_call.results = error.message || 'An error occurred while executing the function.';
-        }
-
-        if (response.data.choices[0].message.content != null) {
-            await interaction.editReply(response.data.choices[0].message.content);
-        } else {
-            await interaction.editReply('Thinking');
-        }
-        
-        messages.push({ 'role': 'function', 'name': function_call.name, 'content': function_call.results });
-        messageLog.MESSAGES.push(JSON.stringify({ 'role': 'function', 'name': function_call.name, 'content': function_call.results }));
-        
-        response = await openai.createChatCompletion({
-            model: model,
-            messages: messages,
-            functions: functions_list,
-            function_call: 'auto',
-            temperature: 0.2,
-            max_tokens: 300,
-        });
-
-        if (response.data.choices[0].finish_reason == 'function_call') {
-            ({ response, messageLog } = await this.resolve_functions(interaction, response, messageLog, messages, functions_list, openai, model));
-        }
-        return { response, messageLog };
-    }
-    
-    async handleOpenAIError(interaction, error) {
-        await interaction.editReply({
-            content: 'Received error from OpenAI, you can retry the request or if the issue persists please contact us through the support discord found on my profile!',
-            ephemeral: true,
-        });
-
-        if (error.response) {
-            if (error.response.status == 400) {
-                await interaction.followUp({
-                    content: 'Your chat might be exceeding the models maximum conversation length! Use the /reset command to start over.',
-                    ephemeral: true,
-                });
-            }
-            console.log(error.response.status);
-            console.log(error.response.data);
-        } else {
-            console.log(error.message);
-        }
-    }
-
 }
 
 module.exports = BaseCommand;

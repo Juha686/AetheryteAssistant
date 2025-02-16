@@ -1,9 +1,14 @@
 function buildFunctionObject(name, description, parameters, options = {}) {
     return {
-        name,
-        description,
-        parameters,
-        isPremium: options.isPremium || false
+        type: 'function',
+        function: {
+            name,
+            description,
+            parameters
+        },
+        options: {
+            isPremium: options.isPremium || false
+        }
     };
 }
 

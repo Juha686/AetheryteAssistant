@@ -11,7 +11,7 @@
   "dependencies": {
     "canvas": "^2.11.0",
     "discord.js": "^14.7.1",
-    "openai": "^3.2.1",
+    "openai": "^4.0.0",
     "redis": "^4.6.5",
     "redis-om": "^0.4.7",
     "undici": "^5.20.0"

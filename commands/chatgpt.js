@@ -1,93 +1,65 @@
-const { SlashCommandBuilder } = require('discord.js');
-const { Configuration, OpenAIApi } = require('openai');
-const { randomUUID } = require('crypto');
-const baseCommand = require('./baseCommand.js');
-const { initializeModules, getFunctionDefinitions } = require('./functions/functionMap');
+const { SlashCommandBuilder, AttachmentBuilder } = require('discord.js');
+const AICommand = require('./aiCommand');
+const { getFunctionDefinitions } = require('./functions/functionMap');
+const { getCodeInterpreterTools } = require('./functions/codeInterpreterFunctions');
 
-class chatGPTCommand extends baseCommand {
+class chatGPTCommand extends AICommand {
+    constructor(client) {
+        super(client);
+        this.data = new SlashCommandBuilder()
+            .setName('assistant')
+            .setDescription('Chat with the assistant')
+            .addStringOption(option =>
+                option.setName('message')
+                    .setDescription('Your message to Aetheryte Assistant')
+                    .setRequired(true));
+    }
 
-	constructor(client) {
-		super(client);
-		this.data = new SlashCommandBuilder()
-			.setName('assistant')
-			.setDescription('Chat with the assistant')
-			.addStringOption(option =>
-				option.setName('message')
-					.setDescription('Your message to Atheryte Assistant')
-					.setRequired(true));
+    getTools() {
+        return [
+            ...getCodeInterpreterTools(),
+            ...getFunctionDefinitions()
+        ];
+    }
+
+    getInstructions() {
+        return `You are Aetheryte Assistant, a helpful FFXIV-focused AI that speaks in the style of Alphinaud. 
+            You provide information about Final Fantasy XIV using the official wiki at https://ffxiv.consolegameswiki.com/wiki/
+            You can access current market data through the marketboard and history commands.
+            You can use code interpreter to help analyze data and create visualizations when appropriate.
+            Available commands:
+            - /assistant: Main way to chat with you
+            - /config: Set language and server preferences
+            - /marketboard: Show 10 cheapest items in user's datacenter
+            - /history: Show recent trades for items
+            - /sets: Display servers with lowest prices for gear sets
+            
+            Market data comes from Universalis. Direct users to use specific commands rather than trying to handle those requests yourself.`;
+    }
+
+    getModel() {
+		console.log('Using GPT-4o model');
+        return "gpt-4o";
+    }
+
+    getNonPremiumModel() {
+		console.log('Using GPT-4o-mini model');
+        return "gpt-4o-mini";
+    }
+
+    get assistantName() {
+        return "Aetheryte Assistant";
+    }
+
+    get assistantConfigKey() {
+        return "assistant";
+    }
+
+	
+	getTemperature() {
+		return 0.7; // Default temperature for balanced responses
 	}
 
-	async execute(interaction) {
-		await interaction.deferReply();
-		const configuration = new Configuration({
-			apiKey: process.env.CHATGPT_API,
-		});
-		const openai = new OpenAIApi(configuration);
-
-		initializeModules({ openai });
-
-		const query = interaction.options.getString('message');
-		let assistantMessageLog = await this.assistantMessageLogRepository.fetch(interaction.user.id);
-		const baseMessage = { 'role': 'system', 'content': 'You are a helpful assistant, named Aetheryte Assistant, talking in the style of Alphinaud from Final Fantasy 14. Your answers should relate to the game Final Fantasy 14. You are a discord bot. You should utilise the wiki to provide most up to date answers. You also provide current market data for items through marketboard and history commands. You only have the following commands: assistant, config, marketboard, history, sets. The assistant command is the primary way to communicate with you. config command is used to set language, players data center and server information through a select menu. sets command shows the servers with lowest prices for each item piece. History command shows recent trades of the item. Marketboard command provides 10 cheapest items in your datacenter, and what server they are on. The commands are seperate, and assistant command is not used to access the other commands. Your source for market data is Universalis. Use https://ffxiv.consolegameswiki.com/wiki/' };
-		const messages = [
-			baseMessage,
-		];
-		const chatUUID = assistantMessageLog.MESSAGES != undefined ? assistantMessageLog.chatUUID : randomUUID();
-		if (assistantMessageLog.MESSAGES) {
-			for (const message in assistantMessageLog.MESSAGES) {
-				messages.push(JSON.parse(assistantMessageLog.MESSAGES[message]));
-			}
-		}
-
-		messages.push({ 'role': 'user', 'content': query });
-		if (!assistantMessageLog.MESSAGES) {
-			assistantMessageLog.MESSAGES = [JSON.stringify({ 'role': 'user', 'content': query })];
-		}
-		else {
-			assistantMessageLog.MESSAGES.push(JSON.stringify({ 'role': 'user', 'content': query }));
-		}
-		
-
-		try {
-			const hasPremium = this.checkEntitlements(interaction);
-			const functions_list = getFunctionDefinitions(hasPremium);
-			const model = hasPremium ? 'gpt-4o-2024-08-06' : 'gpt-4o-mini';
-			console.log(model);
-			let response = await openai.createChatCompletion({
-				model: model,
-				messages: messages,
-				functions: functions_list,
-				function_call: 'auto',
-				temperature: 0.2,
-				max_tokens: 300,
-			});
-
-			if (response.data.choices[0].finish_reason == 'function_call') {
-				({ response, messageLog: assistantMessageLog } = await this.resolve_functions(
-                    interaction, response, assistantMessageLog, messages, functions_list, openai, model
-                ));
-			}
-
-			console.log(response.data.choices[0]);
-			assistantMessageLog.MESSAGES.push(JSON.stringify({ 'role': 'assistant', 'content': response.data.choices[0].message.content }));
-			assistantMessageLog.chatUUID = chatUUID;
-			await this.assistantMessageLogRepository.save(interaction.user.id, assistantMessageLog);
-			await this.chatMessageLogRepository.save(chatUUID, assistantMessageLog);
-			await this.assistantMessageLogRepository.expire(interaction.user.id, 300);
-
-			await interaction.editReply(response.data.choices[0].message.content);
-			if(response.data.finish_reason == 'length') {
-				await interaction.followUp({
-					content: `The response was shortened, use the 'more' keyword to get the rest of the response.`,
-					ephemeral: true,
-				});
-			}
-			//await this.postAdvert(interaction);
-		}
-		catch (error) {
-			await this.handleOpenAIError(interaction, error);
-		}
-	}
 }
 
 module.exports = chatGPTCommand;
