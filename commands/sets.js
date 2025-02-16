@@ -35,17 +35,16 @@ class setsCommand extends baseCommand {
 			await interaction.deferReply();
 			query = interaction.options.getString('query');
 		}
-		let rawQuery = query;
+		
 		if (query.includes('|')) {query = query.split('|')[1].trim();}
 		const queryUi = query;
-		/*const wordsToRemove = [ 'a', 'is', 'the', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'by', 'for',
-			'if', 'in', 'into', 'it', 'no', 'not', 'of', 'on', 'or', 'such', 'that', 'their',
-			'then', 'there', 'these', 'they', 'this', 'to', 'was', 'will', 'with'];
-		query = query.split(' ').filter(item => !wordsToRemove.includes(item)).join(' ');*/
 		query = this.removeCommonWords(query);
 		if(query.toLowerCase().includes('set')) {
 			query = query.slice(0, -4);
 		}
+		// The second word is the suffix, get it from the query
+		const suffix = query.split(' ')[1];
+		let rawQuery = query;
 		let queryWildCard = query.split(' ').map(s => s + '*').join(' ');
 		query = query.replace('-', '*');
 		queryWildCard = queryWildCard.replace('-', '*');
@@ -62,12 +61,28 @@ class setsCommand extends baseCommand {
 			language_string = mapUserLanguage(user.LANGUAGE);
 		}
 		console.log(language_string);
-		const itemList = await this.itemRepository.search()
-			.where(language_string)
-			.match(query)
-			.or(language_string)
-			.match(queryWildCard)
-			.return.all();
+		let itemList = [];
+
+		try {
+			const directMatch = await this.itemRepository.searchRaw(
+				`@${language_string}:"${rawQuery}"`
+			).return.all();
+		
+			if (directMatch.length > 0) {
+				itemList = directMatch;
+			} else {
+				// Only try fuzzy search if exact match fails
+				const terms = rawQuery.split(' ');
+				const fuzzyQuery = `@${language_string}:(${terms.map(term => `*${term}*`).join('|')})`;
+				console.log('Attempting fuzzy search with:', fuzzyQuery);
+				const fuzzyResults = await this.itemRepository.searchRaw(fuzzyQuery).return.all();
+				itemList = fuzzyResults;
+				console.log('Fuzzy search results:', itemList.length);
+			}
+		} catch (error) {
+			console.error('Redis search error:', error);
+			throw error;
+		}
 		if (itemList.length < 1) {
 			await interaction.editReply({ content: 'Item not found, please try again. Use autocompleted entries to guarantee a match', ephemeral: true });
 			return 'Item not found. Get the exact name of the item from the wiki.';
@@ -75,6 +90,9 @@ class setsCommand extends baseCommand {
 		let idList = '';
 		console.log(idList);
 		itemList.forEach((itemIteration) => {
+			if(!itemIteration[language_string].includes(suffix)) {
+				return;
+			}
 			if (user.LANGUAGE == 'Japanese') {
 				if (itemIteration[language_string].split('・')[0].split('-')[0].includes(query.split('・')[0].split('*')[0])) {
 					idList += itemIteration.ID + ',';
@@ -135,10 +153,7 @@ class setsCommand extends baseCommand {
 	async autocomplete(interaction) {
 		let focusedValue = interaction.options.getFocused();
 		const user = await this.userRepository.fetch(interaction.user.id);
-		/*const wordsToRemove = [ 'a', 'is', 'the', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'by', 'for',
-			'if', 'in', 'into', 'it', 'no', 'not', 'of', 'on', 'or', 'such', 'that', 'their',
-			'then', 'there', 'these', 'they', 'this', 'to', 'was', 'will', 'with' ];
-		focusedValue = focusedValue.split(' ').filter(item => !wordsToRemove.includes(item)).join(' ');*/
+		const rawQuery = focusedValue;
 		focusedValue = this.removeCommonWords(focusedValue);
 		if (focusedValue.length <= 2) {
 			return 1;
@@ -148,13 +163,28 @@ class setsCommand extends baseCommand {
 		focusedValueWildCard = focusedValueWildCard.replace('-', '*');
 
 		const language_string = mapUserLanguage(user.LANGUAGE);
-		const itemList = await this.itemRepository.search()
-			.where(language_string)
-			.match(focusedValue)
-			.or(language_string)
-			.match(focusedValueWildCard)
-			.sortDescending('LEVELITEM')
-			.return.all();
+		let itemList = [];
+
+		try {
+			const directMatch = await this.itemRepository.searchRaw(
+				`@${language_string}:"${rawQuery}"`
+			).return.all();
+		
+			if (directMatch.length > 0) {
+				itemList = directMatch;
+			} else {
+				// Only try fuzzy search if exact match fails
+				const terms = rawQuery.split(' ');
+				const fuzzyQuery = `@${language_string}:(${terms.map(term => `*${term}*`).join('|')})`;
+				console.log('Attempting fuzzy search with:', fuzzyQuery);
+				const fuzzyResults = await this.itemRepository.searchRaw(fuzzyQuery).return.all();
+				itemList = fuzzyResults;
+				console.log('Fuzzy search results:', itemList.length);
+			}
+		} catch (error) {
+			console.error('Redis search error:', error);
+			throw error;
+		}
 		if (itemList.length < 1) {
 			return 1;
 		}

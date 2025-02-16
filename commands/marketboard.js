@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder } = require('discord.js');
+const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const { request } = require('undici');
 const { drawMarketboard } = require('../libraries/imagebuilder.js');
 const { mapUserLanguage } = require('../libraries/language.js');
@@ -22,8 +22,7 @@ class marketboardCommand extends baseCommand {
 
 	async execute(interaction, optionalQuery = null) {
 				
-		const userRepository = interaction.client.redisrepositories.get('userRepository');
-		const user = await userRepository.fetch(interaction.user.id);
+		const user = await this.userRepository.fetch(interaction.user.id);
 		if (!user.LANGUAGE || user.LANGUAGE == null) {
 			await interaction.deferReply();
 			await interaction.editReply({ content:'Please use config command to set up your preferences!', ephemeral: true });
@@ -38,15 +37,7 @@ class marketboardCommand extends baseCommand {
 			query = interaction.options.getString('query');
 		}
 		let rawQuery = query;
-		/*const wordsToRemove = [ 'a', 'is', 'the', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'by', 'for',
-			'if', 'in', 'into', 'it', 'no', 'not', 'of', 'on', 'or', 'such', 'that', 'their',
-			'then', 'there', 'these', 'they', 'this', 'to', 'was', 'will', 'with' ];
-		query = query.split(' ').filter(item => !wordsToRemove.includes(item)).join(' ');*/
 		query = this.removeCommonWords(query);
-		let queryWildCard = query.split(' ').map(s => s + '*').join(' ');
-		query = query.replace('-', '*');
-		queryWildCard = queryWildCard.replace('-', '*');
-		const itemRepository = interaction.client.redisrepositories.get('itemRepository');
 		console.log(query);
 		if (query.length <= 2) {
 			return await interaction.editReply('Query length too short, please use autocomplete provided responses');
@@ -57,16 +48,32 @@ class marketboardCommand extends baseCommand {
 		} else {
 			language_string = mapUserLanguage(user.LANGUAGE);
 		}
-		console.log(language_string);
-		let itemList = await itemRepository.search()
-			.where(language_string)
-			.match(query)
-			.or(language_string)
-			.match(queryWildCard)
-			.return.all();
+
+		let itemList = [];
+
+		try {
+			const directMatch = await this.itemRepository.searchRaw(
+				`@${language_string}:"${rawQuery}"`
+			).return.all();
+		
+			if (directMatch.length > 0) {
+				itemList = directMatch;
+			} else {
+				// Only try fuzzy search if exact match fails
+				const terms = rawQuery.split(' ');
+				const fuzzyQuery = `@${language_string}:(${terms.map(term => `*${term}*`).join('|')})`;
+				console.log('Attempting fuzzy search with:', fuzzyQuery);
+				const fuzzyResults = await this.itemRepository.searchRaw(fuzzyQuery).return.all();
+				itemList = fuzzyResults;
+				console.log('Fuzzy search results:', itemList.length);
+			}
+		} catch (error) {
+			console.error('Redis search error:', error);
+			throw error;
+		}
 
 		let foundResult = false;
-		if (itemList.length < 1) {
+		if (itemList.length < 1 || itemList.length > 5) {
 			await interaction.editReply({ content: 'Item not found, please try again. Use autocompleted entries to guarantee a match', ephemeral: true });
 			return 'Item not found. If needed, get the exact name of the item from the wiki.';
 		}
@@ -138,28 +145,37 @@ class marketboardCommand extends baseCommand {
 
 	async autocomplete(interaction) {
 		let focusedValue = interaction.options.getFocused();
-		const userRepository = interaction.client.redisrepositories.get('userRepository');
-		const user = await userRepository.fetch(interaction.user.id);
-		/*const wordsToRemove = [ 'a', 'is', 'the', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'by', 'for',
-			'if', 'in', 'into', 'it', 'no', 'not', 'of', 'on', 'or', 'such', 'that', 'their',
-			'then', 'there', 'these', 'they', 'this', 'to', 'was', 'will', 'with' ];
-		focusedValue = focusedValue.split(' ').filter(item => !wordsToRemove.includes(item)).join(' ');*/
+		const user = await this.userRepository.fetch(interaction.user.id);
 		focusedValue = this.removeCommonWords(focusedValue);
 		if (focusedValue.length <= 2) {
 			return 1;
 		}
-		let focusedValueWildCard = focusedValue.split(' ').map(s => s + '*').join(' ');
+		let rawQuery = focusedValue;
 		focusedValue = focusedValue.replace('-', '*');
-		focusedValueWildCard = focusedValueWildCard.replace('-', '*');
-		const itemRepository = interaction.client.redisrepositories.get('itemRepository');
 
 		const language_string = mapUserLanguage(user.LANGUAGE);
-		const itemList = await itemRepository.search()
-			.where(language_string)
-			.match(focusedValue)
-			.or(language_string)
-			.match(focusedValueWildCard)
-			.return.page(0, 5);
+		let itemList = [];
+
+		try {
+			const directMatch = await this.itemRepository.searchRaw(
+				`@${language_string}:"${rawQuery}"`
+			).return.all();
+		
+			if (directMatch.length > 0) {
+				itemList = directMatch;
+			} else {
+				// Only try fuzzy search if exact match fails
+				const terms = rawQuery.split(' ');
+				const fuzzyQuery = `@${language_string}:(${terms.map(term => `*${term}*`).join('|')})`;
+				console.log('Attempting fuzzy search with:', fuzzyQuery);
+				const fuzzyResults = await this.itemRepository.searchRaw(fuzzyQuery).return.all();
+				itemList = fuzzyResults;
+				console.log('Fuzzy search results:', itemList.length);
+			}
+		} catch (error) {
+			console.error('Redis search error:', error);
+			throw error;
+		}
 
 		const resultListing = [];
 		for (const val of itemList) {
@@ -173,6 +189,8 @@ class marketboardCommand extends baseCommand {
 		const resultMap = resultListing.map(choice => ({ name: choice, value: choice }));
 		await interaction.respond(resultMap);
 	}
+
+
 }
 
 

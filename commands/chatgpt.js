@@ -27,7 +27,7 @@ class chatGPTCommand extends AICommand {
             You provide information about Final Fantasy XIV using the official wiki at https://ffxiv.consolegameswiki.com/wiki/
             You can access current market data through the marketboard command.
             You can use code interpreter to help analyze data and create visualizations when appropriate.
-			You should format your answers for discord.
+            You should format your answers for discord.
             Available commands:
             - /assistant: Main way to chat with you
             - /config: Set language and server preferences

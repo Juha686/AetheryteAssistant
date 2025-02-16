@@ -202,33 +202,54 @@ const drawItemSets = async function(items, itemList, language) {
 		{ x: 45, y: 282 },
 		{ x: 45, y: 321 },
 		{ x: 45, y: 360 },
-		{ x: 45, y: 399 },
-		{ x: 45, y: 438 },
-		{ x: 45, y: 477 },
 	];
 	const totalLocation = { x: 575, y: 400 };
+	
+	// Before the for loop, add a slots tracking object
+	const usedSlots = {};
 	let totalPrice = 0;
+
 	for (let val in items) {
 		context.fillStyle = '#ffffff';
 		val = items[val];
 		if (typeof val.listings[0] == 'undefined') {continue;}
 		const dbItem = itemList.find(element => element.ID == val.itemID);
+		
+		// Add validation for ITEMSLOT
+		if (!dbItem || dbItem.ITEMSLOT < 3 || dbItem.ITEMSLOT > 14) {
+			console.warn(`Invalid ITEMSLOT for item ${val.itemID}`);
+			continue;
+		}
+
+		// Adjust ITEMSLOT if needed
 		if (dbItem.ITEMSLOT > 5) {
 			dbItem.ITEMSLOT -= 1;
 		}
-		let leftToRightOffset = gearSlotCoords[dbItem.ITEMSLOT - 3].x;
-		context.fillText(dbItem[language], leftToRightOffset, gearSlotCoords[dbItem.ITEMSLOT - 3].y);
+
+		// Ensure index is within bounds and slot isn't already used
+		const slotIndex = dbItem.ITEMSLOT - 3;
+		if (slotIndex < 0 || slotIndex >= gearSlotCoords.length || usedSlots[slotIndex]) {
+			console.warn(`Slot ${slotIndex} already used or out of bounds for item ${val.itemID}`);
+			continue;
+		}
+
+		// Mark slot as used
+		usedSlots[slotIndex] = true;
+
+		let leftToRightOffset = gearSlotCoords[slotIndex].x;
+		// Use slotIndex consistently instead of recalculating
+		context.fillText(dbItem[language], leftToRightOffset, gearSlotCoords[slotIndex].y);
 		leftToRightOffset += 376;
-		context.fillText(val.listings[0].worldName, leftToRightOffset, gearSlotCoords[dbItem.ITEMSLOT - 3].y);
+		context.fillText(val.listings[0].worldName, leftToRightOffset, gearSlotCoords[slotIndex].y);
 		leftToRightOffset += 152;
 		if (val.listings[0].hq == true) {
-			context.drawImage(hqImage, leftToRightOffset, gearSlotCoords[dbItem.ITEMSLOT - 3].y + 3, 16, 16);
+			context.drawImage(hqImage, leftToRightOffset, gearSlotCoords[slotIndex].y + 3, 16, 16);
 		}
 
 		leftToRightOffset += 37;
 		context.fillStyle = '#dddc87';
 		totalPrice += Number(val.listings[0].pricePerUnit);
-		context.fillText(numberWithCommas(val.listings[0].pricePerUnit), leftToRightOffset, gearSlotCoords[dbItem.ITEMSLOT - 3].y);
+		context.fillText(numberWithCommas(val.listings[0].pricePerUnit), leftToRightOffset, gearSlotCoords[slotIndex].y);
 	}
 	context.fillStyle = '#afffa1';
 	context.fillText(numberWithCommas(totalPrice), totalLocation.x, totalLocation.y);

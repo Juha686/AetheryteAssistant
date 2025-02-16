@@ -24,6 +24,7 @@ class HistoryCommand extends BaseCommand {
 		if (!user.LANGUAGE || user.LANGUAGE == null) return await interaction.reply({ content:'Please use config command to set up your preferences!', ephemeral: true });
 
 		let query = interaction.options.getString('query');
+		let rawQuery = query;
 		query = this.removeCommonWords(query);
 		let queryWildCard = query.split(' ').map(s => s + '*').join(' ');
 		query = query.replace('-', '*');
@@ -33,12 +34,28 @@ class HistoryCommand extends BaseCommand {
 			return await interaction.editReply('Query length too short, please use autocomplete provided responses');
 		}
 		const language_string = mapUserLanguage(user.LANGUAGE);
-		let itemList = await this.itemRepository.search()
-			.where(language_string)
-			.match(query)
-			.or(language_string)
-			.match(queryWildCard)
-			.return.all();
+		let itemList = [];
+
+		try {
+			const directMatch = await this.itemRepository.searchRaw(
+				`@${language_string}:"${rawQuery}"`
+			).return.all();
+		
+			if (directMatch.length > 0) {
+				itemList = directMatch;
+			} else {
+				// Only try fuzzy search if exact match fails
+				const terms = rawQuery.split(' ');
+				const fuzzyQuery = `@${language_string}:(${terms.map(term => `*${term}*`).join('|')})`;
+				console.log('Attempting fuzzy search with:', fuzzyQuery);
+				const fuzzyResults = await this.itemRepository.searchRaw(fuzzyQuery).return.all();
+				itemList = fuzzyResults;
+				console.log('Fuzzy search results:', itemList.length);
+			}
+		} catch (error) {
+			console.error('Redis search error:', error);
+			throw error;
+		}
 
 		let foundResult = false;
 		if (!itemList) await interaction.editReply({ content: 'Item not found, please try again. Use autocompleted entries to guarantee a match', ephemeral: true });
@@ -98,17 +115,34 @@ class HistoryCommand extends BaseCommand {
 		if (focusedValue.length <= 2) {
 			return 1;
 		}
+		let rawQuery = focusedValue;
 		let focusedValueWildCard = focusedValue.split(' ').map(s => s + '*').join(' ');
 		focusedValue = focusedValue.replace('-', '*');
 		focusedValueWildCard = focusedValueWildCard.replace('-', '*');
 
 		const language_string = mapUserLanguage(user.LANGUAGE);
-		const itemList = await this.itemRepository.search()
-			.where(language_string)
-			.match(focusedValue)
-			.or(language_string)
-			.match(focusedValueWildCard)
-			.return.page(0, 5);
+		let itemList = [];
+
+		try {
+			const directMatch = await this.itemRepository.searchRaw(
+				`@${language_string}:"${rawQuery}"`
+			).return.all();
+		
+			if (directMatch.length > 0) {
+				itemList = directMatch;
+			} else {
+				// Only try fuzzy search if exact match fails
+				const terms = rawQuery.split(' ');
+				const fuzzyQuery = `@${language_string}:(${terms.map(term => `*${term}*`).join('|')})`;
+				console.log('Attempting fuzzy search with:', fuzzyQuery);
+				const fuzzyResults = await this.itemRepository.searchRaw(fuzzyQuery).return.all();
+				itemList = fuzzyResults;
+				console.log('Fuzzy search results:', itemList.length);
+			}
+		} catch (error) {
+			console.error('Redis search error:', error);
+			throw error;
+		}
 
 		const resultListing = [];
 		for (const val of itemList) {
