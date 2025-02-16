@@ -42,7 +42,7 @@ class updateItemsCommand extends baseCommand {
 					};
 				}
 				else {
-					const itemAdditionalResults = await request(`https://v2.xivapi.com/api/sheet/Item/45579?fields=EquipSlotCategory,LevelItem,LevelEquip`);
+					const itemAdditionalResults = await request(`https://v2.xivapi.com/api/sheet/Item/${item}?fields=EquipSlotCategory,LevelItem,LevelEquip`);
 					const itemAdditionalData = await itemAdditionalResults.body.json();
 					tempItem = {
 						ID: item,
