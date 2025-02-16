@@ -42,7 +42,7 @@ class updateItemsCommand extends baseCommand {
 					};
 				}
 				else {
-					const itemAdditionalResults = await request(`https://xivapi.com/Item/${item}?private_key=d9716cab46ae4cea976bb5821e19c04ab56110f6a6e04c28926477a1ff7be76e `);
+					const itemAdditionalResults = await request(`https://v2.xivapi.com/api/sheet/Item/45579?fields=EquipSlotCategory,LevelItem,LevelEquip`);
 					const itemAdditionalData = await itemAdditionalResults.body.json();
 					tempItem = {
 						ID: item,
@@ -50,13 +50,13 @@ class updateItemsCommand extends baseCommand {
 						DE_Name: itemData[item].de,
 						JA_Name: itemData[item].ja,
 						FR_Name: itemData[item].fr,
-						ITEMSLOT: itemAdditionalData.EquipSlotCategoryTargetID,
-						LEVELEQUIP: itemAdditionalData.LevelEquip,
-						LEVELITEM: itemAdditionalData.LevelItem,
+						ITEMSLOT: itemAdditionalData.fields.EquipSlotCategory.value,
+						LEVELEQUIP: itemAdditionalData.fields.LevelEquip,
+						LEVELITEM: itemAdditionalData.fields.LevelItem.value,
 					};
 					await delay(40);
 					u++;
-					console.log('Got new details from xivapi');
+					console.log(`Got new item ${u} / ${marketableThingies.length}, the new info is ${JSON.stringify(tempItem)}`);
 				}
 				tempItem = await this.itemRepository.save(item, tempItem);
 				if (i % 40 == 0) {
