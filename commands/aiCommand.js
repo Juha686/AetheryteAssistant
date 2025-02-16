@@ -35,6 +35,10 @@ class AICommand extends baseCommand {
                 try {
                     const existingAssistant = await this.openai.beta.assistants.retrieve(this.assistantId);
                     const currentTools = this.getTools();
+                    const currentInstructions = this.getInstructions();
+                    
+                    // Check if instructions have changed
+                    const instructionsChanged = currentInstructions !== existingAssistant.instructions;
                     
                     const normalizeTools = (tools) => {
                         return tools.map(tool => ({
@@ -54,8 +58,11 @@ class AICommand extends baseCommand {
                     const normalizedExisting = normalizeTools(existingAssistant.tools);
                     const toolsChanged = JSON.stringify(normalizedCurrent) !== JSON.stringify(normalizedExisting);
                     
-                    if (toolsChanged) {
-                        console.log('Tools configuration changed, regenerating assistant...');
+                    if (toolsChanged || instructionsChanged) {
+                        console.log('Assistant configuration changed, regenerating assistant...');
+                        if (toolsChanged) console.log('Tools configuration changed');
+                        if (instructionsChanged) console.log('Instructions changed');
+                        
                         await this.openai.beta.assistants.del(this.assistantId);
                         this.assistantId = null;
                         await this.configRepository.remove(this.assistantConfigKey);
@@ -182,14 +189,44 @@ class AICommand extends baseCommand {
         });
 
         if (error.response) {
-            if (error.response.status == 400) {
-                await interaction.followUp({
-                    content: 'Your chat might be exceeding the models maximum conversation length! Use the /reset command to start over.',
-                    ephemeral: true,
-                });
+            if (error.response.status === 400) {
+                const errorMessage = error.response.data?.error?.message || '';
+                
+                // Check for the specific error about active runs
+                if (errorMessage.includes("Can't add messages") && errorMessage.includes("while a run")) {
+                    try {
+                        // Extract run ID from error message using regex
+                        const runIdMatch = errorMessage.match(/run_([\w]+)/);
+                        const threadIdMatch = errorMessage.match(/thread_([\w]+)/);
+                        
+                        if (runIdMatch && threadIdMatch) {
+                            const runId = runIdMatch[0];
+                            const threadId = threadIdMatch[0];
+                            
+                            console.log(`Attempting to cancel run ${runId} on thread ${threadId}`);
+                            
+                            // Cancel the active run
+                            await this.openai.beta.threads.runs.cancel(threadId, runId);
+                            
+                            await interaction.followUp({
+                                content: 'Previous request was still processing. I\'ve cancelled it - please try your request again.',
+                                ephemeral: true,
+                            });
+                            return;
+                        }
+                    } catch (cancelError) {
+                        console.error('Error cancelling run:', cancelError);
+                    }
+                } else {
+                    await interaction.followUp({
+                        content: 'Your chat might be exceeding the models maximum conversation length! Use the /reset command to start over.',
+                        ephemeral: true,
+                    });
+                }
+                
+                console.log(error.response.status);
+                console.log(error.response.data);
             }
-            console.log(error.response.status);
-            console.log(error.response.data);
         } else {
             console.log(error.message);
         }
@@ -225,7 +262,15 @@ class AICommand extends baseCommand {
 
                 const func = functionMap[functionName];
                 if (!func) {
-                    throw new Error(`Function ${functionName} not found`);
+                    console.log(`Function not found: ${functionName}`);
+                    outputs.push({
+                        tool_call_id: toolCall.id,
+                        output: JSON.stringify({
+                            error: `I apologize, but the ${functionName} function is not currently available.`,
+                            unavailableFunction: true
+                        })
+                    });
+                    continue;
                 }
                 
                 try {
@@ -235,9 +280,13 @@ class AICommand extends baseCommand {
                         output: JSON.stringify(result)
                     });
                 } catch (error) {
+                    console.error(`Error executing function ${functionName}:`, error);
                     outputs.push({
                         tool_call_id: toolCall.id,
-                        output: `Error: ${error.message}`
+                        output: JSON.stringify({
+                            error: `An error occurred while processing your request: ${error.message}`,
+                            isError: true
+                        })
                     });
                 }
             }
