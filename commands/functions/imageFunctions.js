@@ -31,7 +31,7 @@ async function generate_image(interaction, args) {
     try {
         const response = await openaiInstance.images.generate({
             model: "dall-e-3",
-            prompt: args.prompt,
+            prompt: args.prompt + ' Image should be stylised like the game Final Fantasy 14.',
             n: 1,
             size: "1024x1024"
         });
