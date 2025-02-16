@@ -5,7 +5,7 @@ const { initializeModules } = require('./functions/functionMap');
 const { functionMap, getFunctionDefinitions } = require('./functions/functionMap');
 
 class AICommand extends baseCommand {
-    static TIMEOUT_MS = 60000; // 1 minute timeout
+    static TIMEOUT_MS = 300000; // 1 minute timeout
     static CHECK_INTERVAL_MS = 500; // Check every 500ms
 
     constructor(client) {

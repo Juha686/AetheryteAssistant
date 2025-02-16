@@ -103,9 +103,20 @@ class marketboardCommand extends baseCommand {
 		}
 		const { listings } = await results.body.json();
 		if (!listings || listings.length < 1) {
+			if (optionalQuery) {
+				return 'No listings found for this item.';
+			}
 			interaction.followUp({ content: ':scream: Could not find any results from universalis!' });
 			return 'Item not found from universalis.';
 		}
+
+		// If this is an AI query (optionalQuery exists), return just the price data
+		if (optionalQuery) {
+			const cheapestListing = listings[0];
+			return `The cheapest price for ${itemList[language_string]} is ${cheapestListing.pricePerUnit} gil${cheapestListing.hq ? ' (HQ)' : ''} on ${cheapestListing.worldName}.`;
+		}
+
+		// Regular Discord command flow - continue with embed creation
 		const image = await drawMarketboard(listings);
 		const attachment = new AttachmentBuilder(image, { name: 'marketboard.png' });
 		const exampleEmbed = new EmbedBuilder()
@@ -122,7 +133,7 @@ class marketboardCommand extends baseCommand {
 		exampleEmbed.setFooter({ text: 'Not affiliated with Universalis.', iconURL: 'https://universalis.app/i/universalis/universalis.png' });
 
 		interaction.editReply({ content: '', embeds: [exampleEmbed], files: [attachment] });
-		return 'Item price succesfully found, the cheapest price is ' + listings[0].pricePerUnit + ' Tell the user to refer to the image for prices.';
+		return 'Item price successfully found, the cheapest price is ' + listings[0].pricePerUnit + ' Tell the user to refer to the image for prices.';
 	}
 
 	async autocomplete(interaction) {
